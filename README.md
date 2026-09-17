@@ -187,3 +187,29 @@ Final renders are in `runs/` (see `runs/README.md`); the control verdicts are in
 - **Dopamine plasticity is dropped.** Audio transmission here is monosynaptic (hop-1 descending neurons only;
   hop 2 and 3 at chance), and the rest of the network acts as a stabiliser that sets the operating regime
   (Control 1a). A reinforcement rule on the recurrent bulk would have no audio-carrying pathway to act on.
+
+## Data, audio and licence
+
+**Connectome.** Janelia FlyEM / Cambridge Drosophila Connectomics / Google
+Connectomics *male CNS* dataset, accessed through neuPrint as
+`male-cns:v1.0` at https://neuprint.janelia.org — 167k neurons covering brain
+and ventral nerve cord. Project page: https://male-cns.janelia.org. The
+connectome itself is **not** redistributed here; `data/fetch_connectome.py`
+downloads it. You need your own neuPrint account and API token in `.env` as
+`NEUPRINT_APPLICATION_CREDENTIALS`.
+
+**Test audio is not included in this repository.** Two clips were used:
+Satie's *Gymnopédie No. 1* (public domain, downloaded from Wikimedia Commons by
+the audio test script) and a commercial recording of a Balkan kyuchek, which is
+not redistributed. What *is* included, under `renders/`, is the generated MIDI
+and the FluidSynth renders of it — these contain no audio from either source
+recording, only synthesised notes triggered by simulated descending-neuron
+spikes.
+
+**Reproducing.** `cache/` is gitignored and holds the fetched connectome, the
+built matrix and the cached simulation runs — roughly a gigabyte, all
+regenerable. Expect about 25 minutes for the initial fetch and roughly 9.3 ms
+per 1 ms simulation step on a CPU.
+
+**Licence.** MIT, see `LICENSE`. The connectome data carries its own terms from
+Janelia; this licence covers the code and the analysis in this repository only.
