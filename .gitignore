@@ -1,12 +1,28 @@
+# secrets
 .env
+
+# environments
 .venv/
 venv/
 __pycache__/
 *.pyc
+
+# large regenerable artefacts
 cache/
-figures/
 runs/
 explore/recon_report.txt
 *.sf2
+
+# audio and midi are ignored by default...
 *.wav
 *.mid
+*.flac
+*.mp3
+*.ogg
+
+# ...except the final deliverable renders
+!renders/*.mid
+!renders/*.wav
+
+# macOS
+.DS_Store

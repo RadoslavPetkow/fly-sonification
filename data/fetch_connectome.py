@@ -125,7 +125,7 @@ def fetch(cfg, force=False, batch_size=None):
             p.unlink(missing_ok=True)
         shutil.rmtree(EDGE_PARTS, ignore_errors=True)
 
-    from neuprint import Client, NeuronCriteria, fetch_adjacencies, fetch_neurons
+    from neuprint import Client, NeuronCriteria, fetch_neurons
     import neuprint
 
     CACHE.mkdir(exist_ok=True)
@@ -198,9 +198,7 @@ def fetch(cfg, force=False, batch_size=None):
         start = ckpt["next_index"]
         stop = min(start + batch_size, len(source_ids))
         t0 = time.time()
-        _, conn = fetch_adjacencies(source_ids[start:stop].tolist(), targets,
-                                    min_total_weight=cfg.fetch_min_weight, omit_rois=True,
-                                    properties=[], weight_props=["weight"], client=c)
+        conn = fetch_batch_with_retry(cfg, c, source_ids[start:stop].tolist(), targets, start, stop)
         dt = time.time() - t0
         if list(conn.columns) != EDGE_SCHEMA.names:
             raise ValueError(f"unexpected adjacency columns {list(conn.columns)}")
@@ -274,6 +272,32 @@ def fetch(cfg, force=False, batch_size=None):
     print_fetch_report(meta)
 
 
+def fetch_batch_with_retry(cfg, client, body_ids, targets, start, stop):
+    """One edge page. HTTP 5xx is retried with exponential backoff; anything else raises at once."""
+    import requests
+    from neuprint import fetch_adjacencies
+
+    for attempt in range(cfg.fetch_max_retries + 1):
+        try:
+            _, conn = fetch_adjacencies(body_ids, targets, min_total_weight=cfg.fetch_min_weight,
+                                        omit_rois=True, properties=[], weight_props=["weight"], client=client)
+            return conn
+        except requests.HTTPError as ex:
+            status = ex.response.status_code if ex.response is not None else None
+            if status is None or not 500 <= status < 600:
+                raise
+            body = ex.response.text.strip().replace("\n", " ")[:300]
+            if attempt == cfg.fetch_max_retries:
+                print(f"  batch [{start}:{stop}] failed with HTTP {status} after {cfg.fetch_max_retries} retries; "
+                      f"body: {body!r}", flush=True)
+                raise
+            delay = cfg.fetch_backoff_s * 2 ** attempt
+            print(f"  batch [{start}:{stop}] HTTP {status} (body: {body!r}); "
+                  f"retry {attempt + 1}/{cfg.fetch_max_retries} in {delay:g}s", flush=True)
+            time.sleep(delay)
+    raise AssertionError("unreachable")
+
+
 def print_fetch_report(meta):
     header("fetch report")
     print(f"dataset {meta['dataset']} uuid={meta['dataset_uuid']} (server {meta['neuprint_server_version']}, "
@@ -296,54 +320,74 @@ def print_fetch_report(meta):
 # =============================================================================
 
 def select_sensory(cfg, neurons):
-    if cfg.sensory_mode == "subclass_auditory":
-        mask = neurons["subclass"] == cfg.sensory_subclass
-        rule = f"subclass == {cfg.sensory_subclass!r}"
+    """Return (candidates, inputs, rule).
+
+    candidates: neurons matching cfg.sensory_mode.
+    inputs:     candidates on cfg.sensory_sides with pre >= cfg.sensory_min_pre; the
+                only neurons that receive external audio current. Every other
+                candidate stays in the network as an ordinary neuron.
+    """
+    subclass = (neurons["subclass"] == cfg.sensory_subclass).fillna(False)
+    prefix = neurons["type"].str.startswith(tuple(cfg.sensory_type_prefixes), na=False)
+    if cfg.sensory_mode == "auditory_or_jo_ab":
+        mask = subclass | prefix
+        rule = f"subclass == {cfg.sensory_subclass!r} OR type startswith {tuple(cfg.sensory_type_prefixes)}"
+    elif cfg.sensory_mode == "subclass_auditory":
+        mask, rule = subclass, f"subclass == {cfg.sensory_subclass!r}"
     elif cfg.sensory_mode == "jo_ab_prefix":
-        mask = neurons["type"].str.startswith(tuple(cfg.sensory_type_prefixes), na=False)
-        rule = f"type startswith {tuple(cfg.sensory_type_prefixes)}"
+        mask, rule = prefix, f"type startswith {tuple(cfg.sensory_type_prefixes)}"
     elif cfg.sensory_mode == "jo_all":
         mask = neurons["type"].str.startswith(cfg.sensory_jo_prefix, na=False)
         rule = f"type startswith {cfg.sensory_jo_prefix!r}"
     else:
         raise ValueError(f"unknown sensory_mode {cfg.sensory_mode!r}")
-    mask = mask.fillna(False).astype(bool).to_numpy()
-    if not mask.any():
-        raise ValueError(f"sensory selection ({rule}) is empty")
-    return mask, rule
+    candidates = mask.fillna(False).astype(bool).to_numpy()
+    if not candidates.any():
+        raise ValueError(f"sensory candidate selection ({rule}) is empty")
+    sides_present = set(neurons.loc[candidates, "rootSide"].dropna())
+    bad_sides = [x for x in cfg.sensory_sides if x not in sides_present]
+    if bad_sides:
+        raise ValueError(f"sensory_sides {bad_sides} not among candidate rootSide values {sorted(sides_present)}")
+    on_side = neurons["rootSide"].isin(cfg.sensory_sides).to_numpy()
+    enough_pre = (neurons["pre"] >= cfg.sensory_min_pre).to_numpy()
+    inputs = candidates & on_side & enough_pre
+    if not inputs.any():
+        raise ValueError("sensory input set is empty after side / min_pre filters")
+    rule += f"; input = rootSide in {tuple(cfg.sensory_sides)} AND pre >= {cfg.sensory_min_pre}"
+    return candidates, inputs, rule
 
 
-def report_sensory(cfg, neurons, mask, rule, roi_counts, all_rois):
-    header(f"sensory population: mode {cfg.sensory_mode!r}, {rule}")
-    s = neurons[mask]
-    print(f"count: {len(s)}")
+def report_sensory(cfg, neurons, candidates, inputs, rule, roi_counts, all_rois):
+    header(f"sensory population: mode {cfg.sensory_mode!r}")
+    print(rule)
+    c = neurons[candidates]
+    print(f"\ncandidates: {len(c)}")
+    print("  L/R x pre > 0 (rootSide):")
+    print(textwrap.indent(pd.crosstab(c["rootSide"].fillna("<null>"), c["pre"] > 0, margins=True)
+                          .rename(columns={False: "pre==0", True: "pre>0"}).to_string(), "    "))
+    off_side = candidates & ~neurons["rootSide"].isin(cfg.sensory_sides).to_numpy()
+    low_pre = candidates & ~off_side & (neurons["pre"] < cfg.sensory_min_pre).to_numpy()
+    print(f"  excluded from input by side (rootSide not in {tuple(cfg.sensory_sides)}): {int(off_side.sum())}")
+    print(f"  excluded from input by pre < {cfg.sensory_min_pre} (on-side): {int(low_pre.sum())} "
+          f"{neurons.loc[low_pre, 'type'].fillna('<null>').value_counts().to_dict()}")
+    print("  (excluded neurons stay in the network as ordinary neurons; they get no external current)")
+
+    s = neurons[inputs]
+    print(f"\nINPUT SET: {len(s)} neurons")
     print("per type:")
     print(textwrap.indent(s["type"].fillna("<null>").value_counts().sort_index().to_string(), "  "))
-    print("L/R split (rootSide x somaSide):")
-    print(textwrap.indent(pd.crosstab(s["rootSide"].fillna("<null>"), s["somaSide"].fillna("<null>"),
-                                      margins=True).to_string(), "  "))
-
-    n_pre0 = int((s["pre"] == 0).sum())
-    frac = n_pre0 / len(s)
-    print(f"\nCRITICAL CHECK: {len(s) - n_pre0} of {len(s)} have pre > 0; "
-          f"{n_pre0} have pre == 0 ({frac:.1%})")
-    print(f"  pre per neuron: min {s['pre'].min()}  median {s['pre'].median():g}  max {s['pre'].max()}")
-    if n_pre0:
-        banner(f"WARNING: {n_pre0} / {len(s)} ({frac:.1%}) sensory neurons have NO presynaptic sites.\n"
-               "They cannot drive anything. If this fraction is large, the input population is\n"
-               "largely non-functional and the selection must be reconsidered before going further.\n"
-               + "  by type: " + str(s.loc[s["pre"] == 0, "type"].fillna("<null>").value_counts().to_dict()))
+    print(f"subclass: {s['subclass'].fillna('<null>').value_counts().to_dict()}")
+    print(f"rootSide: {s['rootSide'].fillna('<null>').value_counts().to_dict()}")
+    print(f"presynapses: median {s['pre'].median():g}, range {s['pre'].min()} .. {s['pre'].max()}; "
+          f"quartiles {s['pre'].quantile(0.25):g} / {s['pre'].quantile(0.75):g}")
 
     missing = [r for r in cfg.sensory_roi_check if r not in all_rois]
     if missing:
         raise KeyError(f"sensory_roi_check ROIs not in dataset: {missing}")
     rc = roi_counts[roi_counts["bodyId"].isin(s["bodyId"]) & roi_counts["roi"].isin(cfg.sensory_roi_check)]
-    any_ids = set(rc["bodyId"])
-    pre_ids = set(rc.loc[rc["pre"] > 0, "bodyId"])
-    print(f"cross-check (not a filter): {len(any_ids)} / {len(s)} have {list(cfg.sensory_roi_check)} in roiInfo; "
-          f"{len(pre_ids)} have pre > 0 there")
-    for r in cfg.sensory_roi_check:
-        print(f"  {r}: {rc.loc[rc['roi'] == r, 'bodyId'].nunique()} neurons")
+    print(f"cross-check (not a filter): {rc['bodyId'].nunique()} / {len(s)} have {list(cfg.sensory_roi_check)} "
+          f"in roiInfo; {rc.loc[rc['pre'] > 0, 'bodyId'].nunique()} have pre > 0 there "
+          f"({', '.join(f'{r}: {rc.loc[rc.roi == r, 'bodyId'].nunique()}' for r in cfg.sensory_roi_check)})")
 
 
 def select_motor(cfg, neurons):
@@ -500,8 +544,8 @@ def build(cfg):
     print(f"autapses (pre == post): {int((pre == post).sum()):,}")
 
     # ---- populations --------------------------------------------------------
-    sensory, rule = select_sensory(cfg, neurons)
-    report_sensory(cfg, neurons, sensory, rule, roi_counts, set(fetch_meta["all_rois"]))
+    sensory_candidates, sensory, rule = select_sensory(cfg, neurons)
+    report_sensory(cfg, neurons, sensory_candidates, sensory, rule, roi_counts, set(fetch_meta["all_rois"]))
     motor = select_motor(cfg, neurons)
     if (sensory & motor).any():
         print(f"note: {int((sensory & motor).sum())} neurons are both sensory and motor")
@@ -550,6 +594,16 @@ def build(cfg):
 
     # ---- threshold -------------------------------------------------------------
     header(f"threshold: drop weight < {cfg.matrix_weight_threshold}")
+    q = np.percentile(w, [50, 75, 90, 95, 99])
+    print(f"raw weight distribution ({len(w):,} edges, {total_w:,} synapses): min {w.min()}  p50 {q[0]:g}  "
+          f"p75 {q[1]:g}  p90 {q[2]:g}  p95 {q[3]:g}  p99 {q[4]:g}  max {w.max():,}")
+    for v in range(1, max(cfg.threshold_report)):
+        print(f"  weight == {v}: {(w == v).mean():6.2%} of edges, {w[w == v].sum() / total_w:6.2%} of synapses")
+    print("threshold sweep over the raw edge list (removes weight < t):")
+    for t in sorted(set(cfg.threshold_report) | {cfg.matrix_weight_threshold}):
+        cut = w < t
+        mark = "  <- matrix_weight_threshold" if t == cfg.matrix_weight_threshold else ""
+        print(f"  t={t}: removes {cut.mean():6.2%} of EDGES, {w[cut].sum() / total_w:6.2%} of SYNAPTIC WEIGHT{mark}")
     keep_signed = ~mod_e
     dropped = keep_signed & ~thr
     signed_w = w[keep_signed].sum()
@@ -579,6 +633,7 @@ def build(cfg):
     out_neurons["nt_source"] = nt_source[sel]
     out_neurons["nt_role"] = role[sel]
     out_neurons["sign"] = sign[sel]
+    out_neurons["is_sensory_candidate"] = sensory_candidates[sel]
     out_neurons["is_sensory"] = sensory[sel]
     out_neurons["is_motor"] = motor[sel]
     sensory_idx = np.flatnonzero(sensory[sel])
@@ -590,6 +645,20 @@ def build(cfg):
     absw = abs(W).tocsc()
     unk_frac = absw[:, np.flatnonzero(unk_in)].sum() / absw.sum()
     print(f"unknown-sign fraction of synaptic weight in the final matrix: {unk_frac:.2%}")
+    pos_w, neg_w = W.data[W.data > 0].sum(), -W.data[W.data < 0].sum()
+    known = ~unk_in
+    kpos = absw[:, np.flatnonzero(known & (out_neurons["sign"].to_numpy() > 0))].sum()
+    kneg = absw[:, np.flatnonzero(known & (out_neurons["sign"].to_numpy() < 0))].sum()
+    print(f"E/I balance by weight: excitatory {pos_w / (pos_w + neg_w):.2%}, inhibitory {neg_w / (pos_w + neg_w):.2%} "
+          f"(known-sign neurons only: excitatory {kpos / (kpos + kneg):.2%})")
+    print(f"density: {W.nnz / (W.shape[0] * W.shape[1]):.3e}")
+
+    excluded = np.flatnonzero((sensory_candidates & ~sensory)[sel])
+    in_deg, out_deg = np.diff(W.indptr), np.diff(W.tocsc().indptr)
+    print(f"sensory candidates excluded from input but present in matrix: {excluded.size} / "
+          f"{int((sensory_candidates & ~sensory).sum())}; of these {int((out_deg[excluded] > 0).sum())} have "
+          f"outgoing and {int((in_deg[excluded] > 0).sum())} incoming matrix edges "
+          f"({int(out_deg[excluded].sum()):,} out / {int(in_deg[excluded].sum()):,} in)")
 
     diag = diagnostics(W, sensory_idx, motor_idx)
 
@@ -608,6 +677,7 @@ def build(cfg):
         "fetch_finished": fetch_meta["finished"],
         "build_timestamp": now(),
         "sensory_rule": rule,
+        "sensory_candidate_idx": np.flatnonzero(sensory_candidates[sel]).tolist(),
         "unknown_sign_weight_fraction_raw": float(w[unk_e].sum() / total_w),
         "unknown_sign_weight_fraction_matrix": float(unk_frac),
         "modulatory_edges": {"file": MODULATORY_EDGES.name, "rows": int(mod_e.sum()),
@@ -629,6 +699,23 @@ def load():
     neurons = pd.read_parquet(NEURONS)
     indices = json.loads(INDICES.read_text())
     return W, neurons, indices
+
+
+def sensory_only():
+    """Sensory report from the neuron cache alone (no edges needed)."""
+    for p in (NEURONS_RAW, NEURON_ROIS_RAW):
+        if not p.exists():
+            raise FileNotFoundError(f"{p} missing; run `python -m data.fetch_connectome fetch` first")
+    cfg = DataConfig()
+    neurons = pd.read_parquet(NEURONS_RAW)
+    roi_counts = pd.read_parquet(NEURON_ROIS_RAW)
+    if FETCH_META.exists():
+        all_rois, src = set(json.loads(FETCH_META.read_text())["all_rois"]), "fetch_meta.json"
+    else:
+        all_rois, src = set(roi_counts["roi"].unique()), "ROIs seen in neuron_rois_raw (fetch not finished)"
+    print(f"{len(neurons):,} cached neurons; ROI names from {src}")
+    candidates, inputs, rule = select_sensory(cfg, neurons)
+    report_sensory(cfg, neurons, candidates, inputs, rule, roi_counts, all_rois)
 
 
 def check():
@@ -663,6 +750,7 @@ def main(argv=None):
     f.add_argument("--batch-size", type=int, default=None, help="override DataConfig.fetch_batch_size")
     b = sub.add_parser("build", help="stage 2: build signed matrix from the raw cache")
     b.add_argument("--max-neurons", type=int, default=None, help="override DataConfig.max_neurons")
+    sub.add_parser("sensory", help="sensory population report from the neuron cache only")
     sub.add_parser("check", help="smoke test: load the built cache and verify it")
     args = ap.parse_args(argv)
 
@@ -673,6 +761,8 @@ def main(argv=None):
         if args.max_neurons is not None:
             cfg.max_neurons = args.max_neurons
         build(cfg)
+    elif args.cmd == "sensory":
+        sensory_only()
     else:
         check()
 
