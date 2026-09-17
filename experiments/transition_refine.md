@@ -20,4 +20,4 @@ Rate curve across the step (x own anchor: rate Hz / sensory preservation / no-dr
 
 ![transition refinement](../figures/transition_refine.png)
 
-**Result:** The claim does NOT survive as stated: 2 of 4 shuffled graphs have a passing point at 1.075x resolution: downstream_only seed 1 (3 points), downstream_only seed 2 (3 points). At this resolution these are narrow (knife-edge) windows, not absent ones.
+**Result:** The claim does NOT survive as stated: 2 of 4 shuffled graphs have a passing point at 1.075x resolution: downstream_only seed 1 (3 points), downstream_only seed 2 (3 points). At this resolution these are narrow windows, not absent ones.

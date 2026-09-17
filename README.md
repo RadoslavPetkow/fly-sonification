@@ -152,14 +152,21 @@ for correlated music bands, which is why Satie hop 2 scored *below* null.
 - Full and downstream-only shuffles put the calibrated network into an input-independent ~35 Hz state (real:
   4-5 Hz). The prediction that downstream-only would change little was WRONG: the structure beyond hop 1 carries
   no audio information but sets the operating point.
-- Control 1a (`experiments/matched_regime.py`): is that just a calibration mismatch? Identical 13-point w_scale
-  scan at g_inh 2.5, each graph centred on its own anchor. The real graph has a working window (2.6 and 4.4 Hz,
-  sensory 85% / 77% of reference, 0 Hz without drive). NONE of 4 shuffled graphs (full and downstream-only, 2 seeds
-  each) has one: silent (<= 0.75 Hz) up to 0.56x anchor, 24-27 Hz at 1x, up to 68 Hz above. So the connectome's
-  topology admits a stable low-rate input-driven state at this g_inh that degree-, weight- and sign-matched random
-  graphs do not. Caveat: grid step 1.78x, a narrower shuffled window is not excluded. Control 1b (transmission at
-  matched rates) was not applicable and was not run; the full/downstream transmission differences therefore remain
-  regime differences, not a matched comparison.
+- Control 1a (`experiments/matched_regime.py`, `experiments/transition_refine.py`): is that just a calibration
+  mismatch? Identical w_scale scan at g_inh 2.5, each graph centred on its own anchor: 13 points (1.78x steps),
+  then the step where the rate crosses 1 Hz re-sampled at 9 points (1.075x steps).
+  - **Real graph:** window from 0.237x to between 0.562x and 1x its anchor (>= 2.37x wide), 1.8-4.4 Hz, sensory
+    75-93% of reference, silent without drive.
+  - **Full shuffles (2 seeds):** NO window at 1.075x resolution. They jump from 0.05 Hz to 16-21 Hz within one
+    1.075x step.
+  - **Downstream-only shuffles (2 seeds):** a NARROW window. 3 of 9 refined points pass all pre-registered
+    conditions (1.2-5.1 Hz, silent without drive, sensory 161-187% of reference, which passes the one-sided > 70%
+    rule). Width 1.155-1.33x, at most a third of the real graph's in log w_scale. The coarse grid had missed it.
+  - The earlier claim "degree-matched random graphs have no working window" therefore does NOT survive. It holds
+    for full shuffles at this resolution. For downstream-only shuffles (real sensory output wiring kept) the
+    finding is a much narrower window, not no window.
+  - Control 1b (transmission at matched rates) now applies to downstream-only and was not run. The Step 6
+    full/downstream transmission differences remain regime differences, not a matched comparison.
 - Sensory-only (same 56 targets, afferent groups re-assigned): no transmission advantage for the real wiring;
   real minus shuffled |r| excess -0.038 [-0.082, -0.007], negative in all 5 sections, nominal p 0.017, not
   surviving multiple comparisons.
@@ -168,7 +175,8 @@ for correlated music bands, which is why Satie hop 2 scored *below* null.
   partitions of the sensory neurons into groups of the same sizes the gap is +0.0275 on average (range -0.012 to
   +0.057, none significant), and the type-sorted gap is more extreme than all 200 (0th percentile). Because the
   group-to-band assignment is ours, the wiring gives no support for a band-to-note correspondence.
-- Net: the sonification depends on the real connectome through its regime (topology), not through
+- Net: the sonification depends on the real connectome through the width of the operating regime its topology
+  gives (wide in the real graph, narrow in downstream-only shuffles, not found in full shuffles), not through
   frequency-specific sensory-to-descending wiring.
 
 ## Status: experimental work closed

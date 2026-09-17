@@ -55,7 +55,7 @@ def transition_step(points, tmin):
 def plot(out, tmin, tmax, k, step):
     names = list(out["graphs"])
     fig, axes = plt.subplots(1, len(names), figsize=(3.1 * len(names), 3.6), sharey=True)
-    colors = [TEXT] + [CATEGORICAL[i % len(CATEGORICAL)] for i in range(len(names) - 1)]
+    colors = [TEXT if n == "real" else CATEGORICAL[ShuffleConfig().regime_conditions.index(n.split(" seed")[0])] for n in names]
     for ax, name, color in zip(axes, names, colors):
         g = out["graphs"][name]
         x = [p["w_over_anchor"] for p in g["points"]]
@@ -160,7 +160,7 @@ def main():
     else:
         names = ", ".join(f"{n} ({g['n_passing']} points)" for n, g in shuffled.items() if g["window"])
         verdict = (f"The claim does NOT survive as stated: {n_win} of {len(shuffled)} shuffled graphs have a passing point at "
-                   f"{step:.3f}x resolution: {names}. At this resolution these are narrow (knife-edge) windows, not absent ones.")
+                   f"{step:.3f}x resolution: {names}. At this resolution these are narrow windows, not absent ones.")
     out["verdict"] = verdict
     OUT_JSON.write_text(json.dumps(out, indent=2))
 

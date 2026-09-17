@@ -6,23 +6,39 @@ Written after reading the numbers; the mechanical flags are in the previous sect
 
 ### What we are allowed to claim
 
-**1. The connectome's topology admits a stable, low-rate, input-driven regime at the calibrated inhibitory gain
-that degree-, weight- and sign-matched random graphs do not (Control 1a).** Under an identical 13-point w_scale
-scan at g_inh 2.5, each graph centred on its own anchor, the real graph passes all three target criteria at two
-points (2.6 and 4.4 Hz; sensory rate 85% and 77% of reference; 0 Hz with the drive removed). None of the four
-shuffled graphs (2 full, 2 downstream-only) passes at any point: they stay silent (<= 0.75 Hz) up to 0.56x their
-anchor and jump to 24-27 Hz at 1x, 41-68 Hz above that, with the sensory neurons pushed to 175-477% of reference
-instead of being held near it. Limit of the statement: the grid spacing is 1.78x in w_scale, so a shuffled window
-narrower than one grid step is not excluded; the real graph's window spans at least one full step on the same
-relative grid. Control 1b (recalibrating each shuffled graph to a matched rate and re-running transmission) was
-therefore not applicable and was not run. The full- and downstream-shuffle transmission and dynamics differences
-in the main table remain comparisons between a 4-5 Hz and a ~35 Hz network: they are regime differences, and the
-matched-rate comparison does not exist at this g_inh.
+**1. Full shuffles have no working window at g_inh 2.5; downstream-only shuffles have a narrow one (Control 1a
+plus refinement).** The 13-point scan (1.78x steps) found no window for any of the 4 shuffled graphs, but they all
+went from < 1 Hz to 24-27 Hz between two neighbouring points, so each of those steps was re-sampled at 9 points
+(1.075x). The result section "Control 1a" below is the coarse scan; its verdict is superseded by the refinement.
+- **Real graph (positive control):** passes from 0.237x its anchor on (1.8-2.7 Hz, sensory 75-93%, 0 Hz without
+  drive). It also passes on the coarse grid at 0.316x and 0.562x and fails at 1x (11.7 Hz). Window width >= 2.37x
+  in w_scale (upper edge not refined).
+- **Full shuffle, seeds 1 and 2:** still no passing point. Each jumps from 0.045 / 0.056 Hz to 20.9 / 16.4 Hz
+  within ONE 1.075x step. A window narrower than 1.075x is not excluded.
+- **Downstream-only shuffle, seeds 1 and 2:** WINDOW EXISTS. 3 of 9 refined points pass all three pre-registered
+  conditions each (seed 1: 1.23, 2.16, 5.13 Hz; seed 2: 1.28, 2.20, 4.96 Hz; 0 Hz without drive in all six).
+  The rise is graded, not a jump. The window is between 1.155x and 1.33x wide in w_scale, at most a third of the
+  real graph's width in log w_scale. The sensory neurons in these passing points fire at 161-187% of the reference
+  rate (real graph: 75-93%); the pre-registered preservation condition is one-sided (> 70%), so they pass.
 
-**2. The pre-registered prediction for downstream-only was wrong, and Control 1a explains why.** Downstream-only
-was expected to change little because hop 2 and hop 3 carry no measurable audio information. It changes as much
-as the full shuffle, and it too has no working window: the structure beyond hop 1 carries no audio information
-but is what makes the low-rate input-driven state possible.
+So the earlier claim "degree-, weight- and sign-matched random graphs do not admit a stable low-rate
+input-driven state at this g_inh" does NOT survive. It holds for the two full shuffles at 1.075x resolution. It
+fails for the two downstream-only shuffles, which keep the real sensory neurons' outgoing wiring and have a
+narrow window. What survives: the real graph's window is much wider (>= 2.37x vs <= 1.33x) and sits with the
+sensory neurons near their unperturbed rate. With 2 graphs per condition, the full vs downstream-only difference
+is an observation, not a tested effect.
+
+Control 1b (recalibrate each shuffled graph to its own window, re-run transmission at matched rates) is now
+applicable to the downstream-only shuffles and was NOT run: the experimental work was closed with this
+refinement. The Step 6 full- and downstream-shuffle transmission and dynamics differences are therefore still
+comparisons at the real calibration (w_scale 4.80, ~1.36x the shuffles' own anchors, ~35 Hz), i.e. regime
+differences, not matched-rate comparisons.
+
+**2. The pre-registered prediction for downstream-only was wrong.** Downstream-only was expected to change little
+because hop 2 and hop 3 carry no measurable audio information. At the real calibration it changes as much as
+the full shuffle, because it moves the operating point: its own window lies at 0.60-0.70x its anchor, far
+below the w_scale the real graph was calibrated at. The structure beyond hop 1 carries no audio information but
+sets where, and how wide, the low-rate input-driven regime is.
 
 **3. There is no evidence that the specific sensory-to-descending wiring improves transmission.** With the
 regime intact (sensory-only shuffle, same 56 targets, afferent groups re-assigned), real minus shuffled |r|
@@ -39,10 +55,12 @@ band is this project's assignment, not measured tonotopy, the wiring gives no su
 correspondence.
 
 ### What this means for the sonification
-The output depends on the real connectome through its topology holding the network in a low-rate, input-driven
-state that matched random graphs do not reach at the same inhibitory gain. It does not, at the level measured
-here, depend on a frequency-specific sensory-to-descending wiring: the apparent selectivity is type structure,
-and randomizing which afferent group contacts which target does not reduce transmission.
+The output depends on the real connectome through the operating regime its topology gives at the calibrated gain.
+That regime is wide in the real graph, narrow in downstream-only shuffles, and not found in full shuffles at
+1.075x resolution. The output does not, at the level measured here, depend on a frequency-specific
+sensory-to-descending wiring: the apparent selectivity is type structure, and randomizing which afferent group
+contacts which target does not reduce transmission.
 
 Limitations: 5 sections (the 2 kyuchek sections overlap by 7 s), 2 seeds per shuffle condition, 2 shuffled
-graphs per condition in Control 1a, a 1.78x w_scale grid, one calibration, one g_inh.
+graphs per condition in Control 1a, 1.075x resolution at the transition step only (the real graph's upper edge
+not refined), one calibration, one g_inh, no matched-rate transmission comparison (Control 1b not run).
