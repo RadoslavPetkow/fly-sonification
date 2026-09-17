@@ -1,0 +1,12 @@
+.env
+.venv/
+venv/
+__pycache__/
+*.pyc
+cache/
+figures/
+runs/
+explore/recon_report.txt
+*.sf2
+*.wav
+*.mid
