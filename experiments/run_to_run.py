@@ -73,18 +73,26 @@ def sha12(path):
     return h.hexdigest()[:12]
 
 
-def results_path(rc, adj_sha, duration_ms):
+def variant_tag(normalization=None, w_scale=None):
+    """Empty for the calibrated network, so existing caches stay valid; otherwise a suffix naming
+    the normalisation and gain, so a raw run can never share a cache path with a sqrt_in run."""
+    if normalization is None and w_scale is None:
+        return ""
+    return f"_{normalization or 'calib'}-w{w_scale:g}" if w_scale is not None else f"_{normalization}"
+
+
+def results_path(rc, adj_sha, duration_ms, variant=""):
     d = CACHE / rc.subdir
     d.mkdir(parents=True, exist_ok=True)
-    return d / f"results_{adj_sha}_d{int(round(duration_ms))}.json"
+    return d / f"results_{adj_sha}_d{int(round(duration_ms))}{variant}.json"
 
 
-def sim_path(rc, adj_sha, seed):
+def sim_path(rc, adj_sha, seed, variant=""):
     """Keyed by the matrix hash, the duration and the noise seed, so this module can be pointed at
     any matrix without the caches ever colliding."""
     d = CACHE / rc.subdir
     d.mkdir(parents=True, exist_ok=True)
-    return d / f"sim_{adj_sha}_d{int(round(rc.duration_ms))}_ns{seed}.npz"
+    return d / f"sim_{adj_sha}_d{int(round(rc.duration_ms))}{variant}_ns{seed}.npz"
 
 
 def adopt_existing(rc, adj_sha, seeds, sc, tc):
@@ -133,8 +141,8 @@ def adopt_existing(rc, adj_sha, seeds, sc, tc):
     return adopted
 
 
-def run_seed(rc, sc, cc, tc, calib, groups, seed, adj, adj_sha, force):
-    path = sim_path(rc, adj_sha, seed)
+def run_seed(rc, sc, cc, tc, calib, groups, seed, adj, adj_sha, force, variant=""):
+    path = sim_path(rc, adj_sha, seed, variant)
     want = {"sim_seed": int(seed), "adjacency_sha12": adj_sha, "duration_ms": float(rc.duration_ms),
             "w_scale": float(sc.w_scale), "g_inh": float(sc.g_inh),
             "normalization": sc.normalization, "drive_seed": int(tc.seed)}
@@ -151,7 +159,8 @@ def run_seed(rc, sc, cc, tc, calib, groups, seed, adj, adj_sha, force):
     return counts, drive, meta
 
 
-def main(n_seeds=None, adjacency=None, duration_ms=None, force=False, label=None):
+def main(n_seeds=None, adjacency=None, duration_ms=None, force=False, label=None,
+         normalization=None, w_scale=None):
     rc = RunToRunConfig()
     if duration_ms is not None:
         rc = replace(rc, duration_ms=float(duration_ms))
@@ -161,8 +170,9 @@ def main(n_seeds=None, adjacency=None, duration_ms=None, force=False, label=None
     if not _adj.exists():
         raise FileNotFoundError(_adj)
     _sha = sha12(_adj)
-    log = open(ROOT / Paths().runs / f"run_to_run_{_sha}_d{int(round(rc.duration_ms))}.log",
-               "a", buffering=1)
+    _variant = variant_tag(normalization, w_scale)
+    log = open(ROOT / Paths().runs
+               / f"run_to_run_{_sha}_d{int(round(rc.duration_ms))}{_variant}.log", "a", buffering=1)
 
     class Tee:
         def write(self, s):
@@ -182,6 +192,16 @@ def main(n_seeds=None, adjacency=None, duration_ms=None, force=False, label=None
         tc_big = replace(tc, n_shuffles=rc.n_shuffles)
         calib = json.loads((CACHE / "calibration.json").read_text())
         sc = replace(SimConfig(), **{k: calib[k] for k in CALIBRATED_KEYS})
+        if normalization is not None or w_scale is not None:
+            sc = replace(sc, **({"normalization": normalization} if normalization else {}),
+                         **({"w_scale": float(w_scale)} if w_scale is not None else {}))
+            print(f"  NON-CALIBRATED VARIANT: normalization {sc.normalization!r}, w_scale "
+                  f"{sc.w_scale:.6g} (calibrated: {calib['normalization']!r}, "
+                  f"{calib['w_scale']:.6g}). This is a DIFFERENT OPERATING POINT - its numbers are "
+                  f"not comparable with the calibrated ones, only with other runs of this variant. "
+                  f"w_scale came from experiments/norm_regime.py, chosen on the regime gates alone "
+                  f"before any MI was computed. The external drive is unchanged, so the input is "
+                  f"identical.")
         adj, adj_sha = _adj, _sha
         neurons, indices = load_neurons_and_indices()
         sens = np.asarray(indices["sensory_idx"])
@@ -214,12 +234,14 @@ def main(n_seeds=None, adjacency=None, duration_ms=None, force=False, label=None
               f"{seeds} (seed 0 is the run every other experiment in this repo is built on)")
         print(f"held fixed: graph, drive (TransmissionConfig.seed {tc.seed}), duration "
               f"{rc.duration_ms / 1e3:g} s, " + ", ".join(f"{k}={calib[k]}" for k in CALIBRATED_KEYS))
-        adopt_existing(rc, adj_sha, seeds, sc, tc)
+        if not _variant:
+            adopt_existing(rc, adj_sha, seeds, sc, tc)
 
         rows = {}
         for seed in seeds:
             header(f"NOISE SEED {seed}")
-            counts, drive, meta = run_seed(rc, sc, cc, tc, calib, in_groups, seed, adj, adj_sha, force)
+            counts, drive, meta = run_seed(rc, sc, cc, tc, calib, in_groups, seed, adj, adj_sha,
+                                           force, _variant)
             total = counts.sum(axis=0, dtype=np.int64)
             T = counts.shape[0] * tc.bin_ms / 1e3
             rates = total / T
@@ -347,7 +369,9 @@ def main(n_seeds=None, adjacency=None, duration_ms=None, force=False, label=None
                "run_to_run_config": asdict(rc), "null_z_min": tc.null_z_min}
         out["label"] = label
         out["n_shuffles"] = rc.n_shuffles
-        rp = results_path(rc, adj_sha, rc.duration_ms)
+        out["normalization"] = sc.normalization
+        out["w_scale"] = sc.w_scale
+        rp = results_path(rc, adj_sha, rc.duration_ms, _variant)
         rp.write_text(json.dumps(out, indent=2, default=str))
         print(f"\nwrote {rp.relative_to(ROOT)}")
         figure(rc, summary, seeds, tc, comparison, adj_sha)
@@ -563,12 +587,18 @@ def compare(paths, layer="motor at hop 2", alpha=0.05, power=0.80):
                       "excess": d["summary"][layer]["excess"], "z": d["summary"][layer]["z"],
                       "mi": d["summary"][layer]["mi"],
                       "p": d["summary"][layer].get("p_empirical"),
+                      "normalization": d.get("normalization"), "w_scale": d.get("w_scale"),
                       "n_crossed": d["summary"][layer].get("n_crossed_z"),
                       "n_shuffles": d.get("n_shuffles")})
     header(f"CONDITION COMPARISON - {layer}, excess (real - null mean), paired by noise seed")
     durations = {c["duration_ms"] for c in conds}
     if len(durations) > 1:
         raise ValueError(f"conditions were measured at different durations: {durations}")
+    points = {(c.get("normalization"), c.get("w_scale")) for c in conds}
+    if len(points) > 1:
+        raise ValueError(f"conditions were measured at different operating points: {points}; a "
+                         f"normalisation variant may only be compared with other runs of that "
+                         f"same variant")
     print(f"  {len(conds)} conditions at {conds[0]['duration_ms'] / 1e3:g} s, "
           f"{conds[0]['n_shuffles']} shuffles per run")
     print(f"  {'condition':<28} {'seeds':>5} {'mean excess':>12} {'95% CI':>26} {'sd':>9} "
@@ -644,6 +674,8 @@ if __name__ == "__main__":
                     help="result json files to compare instead of running")
     ap.add_argument("--profile", nargs="+", default=None,
                     help="result json files to profile (three descending layers on one scale)")
+    ap.add_argument("--normalization", default=None, choices=("raw", "in_degree", "sqrt_in"))
+    ap.add_argument("--w-scale", type=float, default=None)
     ap.add_argument("--force", action="store_true")
     a = ap.parse_args()
     if a.profile:
@@ -651,4 +683,4 @@ if __name__ == "__main__":
     elif a.compare:
         compare(a.compare)
     else:
-        main(a.seeds, a.adjacency, a.duration_ms, a.force, a.label)
+        main(a.seeds, a.adjacency, a.duration_ms, a.force, a.label, a.normalization, a.w_scale)
