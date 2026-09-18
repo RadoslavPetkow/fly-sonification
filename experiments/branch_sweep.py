@@ -790,6 +790,19 @@ def report(store, ctx):
         (f"duration_ms is {ctx.bc.duration_ms / 1e3:g} s, half of TransmissionConfig.duration_ms "
          f"({TransmissionConfig().duration_ms / 1e3:g} s), for runtime; the k = 0 condition measures "
          f"what that shortening costs."),
+        ("DOSE AND THE INTERNAL CONTROL: at k = 100 only 94 of the 1,057 descending hop-2 targets "
+         "received an added edge, so the 963 untouched ones served as a control group INSIDE the "
+         "same simulation. At k = 10,000 every one of the 1,057 targets receives at least one edge "
+         "(manifest: targets_touched 1,057/1,057, +1..24 each), so that within-simulation "
+         "touched/untouched contrast does not exist at this dose - there are no untouched cells "
+         "left to compare against."),
+        ("That contrast is therefore REPLACED, not abandoned, by external control arms carrying an "
+         "identical edge count, sign split and weight multiset placed elsewhere: arm C (displaced) "
+         "moves both sources and targets to hop-3 non-motor neurons, and arm D (wrong_targets) "
+         "keeps the real hop-1 sources and moves only the targets to non-descending hop-2 neurons. "
+         "The k = 100 touched/untouched check WAS run and is reported in cache/branch_checks.json: "
+         "it found cells that received no edges moving as far as cells that did, which is why the "
+         "ladder's headline was withdrawn rather than refined."),
         ("A layer's statistic is the mean over its units with >= TransmissionConfig.min_spikes spikes, "
          "so the ANALYZED subset of a fixed layer grows with k even though layer MEMBERSHIP is fixed "
          "from the unmodified matrix; the units column of the results table reports it at every k."),
