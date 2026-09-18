@@ -1,166 +1,513 @@
-<title>Fly Connectome Player</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
-<style>
-  :root{
-    --ground:#111110; --panel:#191917; --edge:#26251f;
-    --ink:#f4f2ec; --ink2:#9c9a91; --muted:#6a6862;
-    --in:#3987e5; --out:#d95926;
-    --sans:"IBM Plex Sans",system-ui,-apple-system,sans-serif;
-    --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
-  }
-  *{box-sizing:border-box}
-  html,body{margin:0}
-  body{background:var(--ground); color:var(--ink); font-family:var(--sans);
-       font-size:15px; line-height:1.5; padding-inline:20px; padding-block:26px 34px}
-  .wrap{max-width:1200px; margin:0 auto}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>A fly brain, playing music — Connectome Sonification</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+  <style>
+    :root {
+      --ground: #0d0d0c;
+      --panel: #161614;
+      --edge: #26251f;
+      --edge-hover: #3a3931;
 
-  header{display:flex; flex-wrap:wrap; gap:18px 26px; align-items:flex-end;
-         justify-content:space-between; margin-bottom:20px}
-  h1{font-size:clamp(23px,4.4vw,31px); font-weight:700; letter-spacing:-.02em;
-     margin:0 0 5px; text-wrap:balance}
-  .dek{margin:0; color:var(--ink2); font-size:13.5px; max-width:58ch}
-  .dek b{color:var(--ink); font-weight:600}
-  .tabs{display:flex; gap:6px; flex-wrap:wrap}
-  .tab{font-family:var(--mono); font-size:11.5px; letter-spacing:.07em; text-transform:uppercase;
-       color:var(--ink2); background:transparent; border:1px solid var(--edge); border-radius:2px;
-       padding:7px 12px; cursor:pointer; transition:color .13s,border-color .13s,background .13s}
-  .tab:hover{color:var(--ink); border-color:#3a3931}
-  .tab[aria-pressed="true"]{color:var(--ground); background:var(--ink); border-color:var(--ink)}
-  .tab:focus-visible{outline:2px solid var(--in); outline-offset:2px}
+      --ink: #f4f2ec;
+      --ink2: #aba89e;
+      --muted: #a09d94;
 
-  .stage{display:grid; gap:18px; align-items:start;
-         grid-template-columns:300px minmax(0,1fr) 148px;
-         grid-template-areas:"brain lanes rail"}
-  @media (max-width:1020px){
-    .stage{grid-template-columns:250px minmax(0,1fr); grid-template-areas:"brain lanes" "rail rail"}
-  }
-  @media (max-width:720px){
-    .stage{grid-template-columns:minmax(0,1fr); grid-template-areas:"brain" "lanes" "rail"}
-  }
+      --in: #3987e5;
+      --out: #d95926;
+      --out-hover: #e86a34;
 
-  .card{background:var(--panel); border:1px solid var(--edge); border-radius:3px}
-  .brain{grid-area:brain; padding:13px 13px 11px}
-  .lanes{grid-area:lanes}
-  .rail{grid-area:rail}
+      --sans: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+      --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
 
-  .cap{display:flex; align-items:baseline; justify-content:space-between; gap:10px; margin-bottom:6px}
-  .cap-name{font-family:var(--mono); font-size:10.5px; letter-spacing:.11em;
-            text-transform:uppercase; color:var(--ink2)}
-  .cap-note{font-family:var(--mono); font-size:10.5px; color:var(--muted)}
-  canvas{display:block; width:100%; max-width:100%}
-  #c-brain{aspect-ratio:90832 / 121771; height:auto}
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: var(--ground);
+      color: var(--ink);
+      font-family: var(--sans);
+      font-size: 13.5px;
+      line-height: 1.45;
+    }
 
-  .key{display:flex; flex-wrap:wrap; gap:4px 11px; margin-top:9px}
-  .key span{display:inline-flex; align-items:center; gap:5px; font-family:var(--mono);
-            font-size:10px; letter-spacing:.04em; color:var(--muted)}
-  .key i{width:7px; height:7px; border-radius:50%; display:block; flex:none}
+    .wrap {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 12px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      min-height: 100vh;
+      justify-content: space-between;
+    }
 
-  .scope{position:relative; padding:13px 13px 10px}
-  .lane + .lane{margin-top:12px}
-  #overlay{position:absolute; inset:13px 13px 10px; pointer-events:none}
+    header {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 16px;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--edge);
+      padding-bottom: 8px;
+    }
 
-  .rail{display:flex; flex-direction:column; gap:1px; background:var(--edge); overflow:hidden}
-  .cell{background:var(--panel); padding:10px 12px}
-  .cell dt{font-family:var(--mono); font-size:9.5px; letter-spacing:.11em; text-transform:uppercase;
-           color:var(--muted); margin:0 0 3px}
-  .cell dd{margin:0; font-family:var(--mono); font-size:18px; font-weight:500;
-           font-variant-numeric:tabular-nums; color:var(--ink)}
-  .cell dd small{font-size:10.5px; color:var(--ink2); font-weight:400; margin-left:3px}
-  @media (max-width:1020px){ .rail{flex-direction:row; flex-wrap:wrap} .cell{flex:1 1 30%} }
-  @media (max-width:720px){ .cell{flex:1 1 44%} }
+    .title-group {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
 
-  .transport{display:flex; align-items:center; gap:14px; margin-top:16px; flex-wrap:wrap}
-  .play{display:inline-flex; align-items:center; gap:9px; background:var(--out); color:#fff;
-        border:0; border-radius:2px; padding:10px 18px; cursor:pointer; font-family:var(--mono);
-        font-size:12px; letter-spacing:.09em; text-transform:uppercase; font-weight:500}
-  .play:hover{background:#e86a34}
-  .play:focus-visible{outline:2px solid var(--ink); outline-offset:2px}
-  .play svg{display:block}
-  .clock{font-family:var(--mono); font-size:12.5px; color:var(--ink2); font-variant-numeric:tabular-nums}
-  .seek{flex:1 1 180px; height:22px; position:relative; cursor:pointer; min-width:150px}
-  .seek-track{position:absolute; left:0; right:0; top:10px; height:2px; background:var(--edge)}
-  .seek-fill{position:absolute; left:0; top:10px; height:2px; background:var(--out)}
-  .seek:focus-visible{outline:2px solid var(--in); outline-offset:3px; border-radius:2px}
+    h1 {
+      font-size: clamp(18px, 2.5vw, 24px);
+      font-weight: 700;
+      letter-spacing: -.02em;
+      margin: 0;
+      color: var(--ink);
+    }
 
-  footer{margin-top:24px; border-top:1px solid var(--edge); padding-top:15px;
-         color:var(--muted); font-size:12.5px; max-width:74ch}
-  footer p{margin:0 0 7px}
-  footer strong{color:var(--ink2); font-weight:600}
-  @media (prefers-reduced-motion:reduce){ *{transition:none!important} }
-</style>
+    .dek {
+      margin: 0;
+      color: var(--ink2);
+      font-size: 12.5px;
+      max-width: 72ch;
+    }
+    .dek b { color: var(--ink); font-weight: 600; }
 
+    .controls-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 4px;
+    }
+
+    .tab {
+      font-family: var(--mono);
+      font-size: 11px;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      color: var(--ink2);
+      background: var(--panel);
+      border: 1px solid var(--edge);
+      border-radius: 3px;
+      padding: 5px 11px;
+      cursor: pointer;
+      transition: color .13s, border-color .13s, background .13s;
+    }
+
+    .tab:hover {
+      color: var(--ink);
+      border-color: var(--edge-hover);
+    }
+
+    .tab[aria-pressed="true"] {
+      color: var(--ground);
+      background: var(--ink);
+      border-color: var(--ink);
+      font-weight: 600;
+    }
+
+    .tab:focus-visible {
+      outline: 2px solid var(--in);
+      outline-offset: 2px;
+    }
+
+    .stage {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      gap: 12px;
+      align-items: stretch;
+    }
+
+    @media (max-width: 900px) {
+      .stage {
+        grid-template-columns: minmax(0, 1fr);
+      }
+    }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--edge);
+      border-radius: 4px;
+    }
+
+    .brain-card {
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .cap {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 8px;
+      width: 100%;
+      margin-bottom: 6px;
+    }
+
+    .cap-name {
+      font-family: var(--mono);
+      font-size: 10.5px;
+      letter-spacing: .11em;
+      text-transform: uppercase;
+      color: var(--ink2);
+      font-weight: 600;
+    }
+
+    .cap-note {
+      font-family: var(--mono);
+      font-size: 10.5px;
+      color: var(--muted);
+    }
+
+    .brain-frame {
+      position: relative;
+      height: min(44vh, 420px);
+      aspect-ratio: 90832 / 121771;
+      max-width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    @media (max-width: 900px) {
+      .brain-frame {
+        height: min(38vh, 340px);
+      }
+    }
+
+    #c-brain {
+      width: 100%;
+      height: 100%;
+      display: block;
+      border-radius: 2px;
+    }
+
+    .key {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px 8px;
+      margin-top: 8px;
+      justify-content: center;
+      width: 100%;
+    }
+
+    .key span {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-family: var(--mono);
+      font-size: 9.5px;
+      letter-spacing: .04em;
+      color: var(--muted);
+    }
+
+    .key i {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      display: block;
+      flex: none;
+    }
+
+    .scope-card {
+      padding: 10px;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .lane {
+      position: relative;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      max-width: 100%;
+    }
+
+    #overlay {
+      position: absolute;
+      inset: 10px;
+      pointer-events: none;
+    }
+
+    .transport-bar {
+      background: var(--panel);
+      border: 1px solid var(--edge);
+      border-radius: 4px;
+      padding: 8px 12px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px 16px;
+      justify-content: space-between;
+    }
+
+    .transport-main {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex: 1 1 320px;
+    }
+
+    .play {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      background: var(--out);
+      color: #fff;
+      border: 0;
+      border-radius: 3px;
+      padding: 7px 14px;
+      cursor: pointer;
+      font-family: var(--mono);
+      font-size: 11px;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      font-weight: 600;
+      transition: background .13s;
+      flex: none;
+    }
+
+    .play:hover {
+      background: var(--out-hover);
+    }
+
+    .play:focus-visible {
+      outline: 2px solid var(--ink);
+      outline-offset: 2px;
+    }
+
+    .play svg {
+      display: block;
+    }
+
+    .seek {
+      flex: 1 1 160px;
+      height: 20px;
+      position: relative;
+      cursor: pointer;
+      min-width: 100px;
+    }
+
+    .seek-track {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 9px;
+      height: 3px;
+      background: var(--edge);
+      border-radius: 2px;
+    }
+
+    .seek-fill {
+      position: absolute;
+      left: 0;
+      top: 9px;
+      height: 3px;
+      background: var(--out);
+      border-radius: 2px;
+    }
+
+    .seek:focus-visible {
+      outline: 2px solid var(--in);
+      outline-offset: 3px;
+      border-radius: 2px;
+    }
+
+    .clock {
+      font-family: var(--mono);
+      font-size: 11.5px;
+      color: var(--ink);
+      font-variant-numeric: tabular-nums;
+      flex: none;
+    }
+
+    .stats-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px 14px;
+      align-items: center;
+    }
+
+    .stat-pill {
+      display: inline-flex;
+      align-items: baseline;
+      gap: 5px;
+      font-family: var(--mono);
+      font-size: 11px;
+    }
+
+    .stat-label {
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      font-size: 9px;
+    }
+
+    .stat-val {
+      color: var(--ink);
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .stat-unit {
+      color: var(--ink2);
+      font-size: 9.5px;
+      font-weight: 400;
+    }
+
+    footer {
+      border-top: 1px solid var(--edge);
+      padding-top: 10px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    @media (max-width: 800px) {
+      footer {
+        grid-template-columns: 1fr;
+        gap: 6px;
+      }
+    }
+
+    footer p {
+      margin: 0;
+    }
+
+    footer strong {
+      color: var(--ink);
+      font-weight: 600;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      * { transition: none !important; }
+    }
+  </style>
+</head>
+<body>
 <div class="wrap">
   <header>
-    <div>
+    <div class="title-group">
       <h1>A fly brain, playing music</h1>
       <p class="dek">Twenty seconds of audio pushed through the <b>Drosophila</b> male CNS
         connectome — 165,122 neurons, 15 million synapses — simulated as spiking neurons.
         Sound enters at the antennae; descending-neuron spikes come out as notes.</p>
     </div>
-    <div class="tabs" role="group" aria-label="Recording">
-      <button class="tab" data-clip="kyuchek" aria-pressed="true">Kyuchek</button>
-      <button class="tab" data-clip="satie" aria-pressed="false">Satie</button>
-      <button class="tab" id="t-scale" data-scale aria-pressed="false">Chromatic</button>
+
+    <div class="controls-group">
+      <div class="tabs" role="group" aria-label="Recording track selection">
+        <button class="tab" data-clip="kyuchek" aria-pressed="true">Kyuchek</button>
+        <button class="tab" data-clip="satie" aria-pressed="false">Satie</button>
+      </div>
+      <div class="tabs" role="group" aria-label="Melodic scale selection">
+        <button class="tab" id="t-scale" data-scale aria-pressed="false">Chromatic</button>
+      </div>
     </div>
   </header>
 
-  <div class="stage">
-    <div class="card brain">
+  <main class="stage">
+    <div class="card brain-card">
       <div class="cap">
-        <span class="cap-name">The brain</span>
+        <span class="cap-name">Brain Anatomy</span>
         <span class="cap-note">3,751 cells</span>
       </div>
-      <canvas id="c-brain"></canvas>
+      <div class="brain-frame">
+        <canvas id="c-brain"></canvas>
+      </div>
       <div class="key">
         <span><i style="background:#3987e5"></i>antenna</span>
         <span><i style="background:#d95926"></i>descending</span>
-        <span><i style="background:#cfcdc4"></i>1 synapse away</span>
-        <span><i style="background:#8a887f"></i>2</span>
-        <span><i style="background:#5c5a54"></i>3</span>
+        <span><i style="background:#cfcdc4"></i>1 syn away</span>
+        <span><i style="background:#8a887f"></i>2 syn</span>
+        <span><i style="background:#5c5a54"></i>3 syn</span>
       </div>
     </div>
 
-    <div class="card lanes scope">
+    <div class="card scope-card">
       <div class="lane">
-        <div class="cap"><span class="cap-name">Sound in</span>
-          <span class="cap-note">8 bands, 80&ndash;1000 Hz</span></div>
-        <canvas id="c-bands" height="92"></canvas>
+        <div class="cap">
+          <span class="cap-name">Sound In</span>
+          <span class="cap-note">8 bands, 80&ndash;1000 Hz</span>
+        </div>
+        <canvas id="c-bands" height="55"></canvas>
       </div>
       <div class="lane">
-        <div class="cap"><span class="cap-name">Descending neurons</span>
-          <span class="cap-note" id="n-spikes">56 cells</span></div>
-        <canvas id="c-spikes" height="218"></canvas>
+        <div class="cap">
+          <span class="cap-name">Descending Neurons</span>
+          <span class="cap-note" id="n-spikes">56 cells</span>
+        </div>
+        <canvas id="c-spikes" height="155"></canvas>
       </div>
       <div class="lane">
-        <div class="cap"><span class="cap-name">Notes out</span>
-          <span class="cap-note">brighter = louder</span></div>
-        <canvas id="c-notes" height="92"></canvas>
+        <div class="cap">
+          <span class="cap-name">Notes Out</span>
+          <span class="cap-note">brighter = louder</span>
+        </div>
+        <canvas id="c-notes" height="55"></canvas>
       </div>
       <canvas id="overlay"></canvas>
     </div>
+  </main>
 
-    <dl class="rail">
-      <div class="cell"><dt>Clip time</dt><dd id="r-time">0.0<small>s</small></dd></div>
-      <div class="cell"><dt>Motor rate</dt><dd id="r-rate">&mdash;<small>Hz</small></dd></div>
-      <div class="cell"><dt>Firing now</dt><dd id="r-live">&mdash;</dd></div>
-      <div class="cell"><dt>Notes now</dt><dd id="r-notes">0</dd></div>
-      <div class="cell"><dt>Total spikes</dt><dd id="r-tot">&mdash;</dd></div>
-    </dl>
-  </div>
+  <div class="transport-bar">
+    <div class="transport-main">
+      <button class="play" id="play" aria-label="Play">
+        <svg id="ico" width="11" height="13" viewBox="0 0 11 13" aria-hidden="true">
+          <path fill="currentColor" d="M0 0l11 6.5L0 13z"></path>
+        </svg>
+        <span id="play-label">Play</span>
+      </button>
 
-  <div class="transport">
-    <button class="play" id="play" aria-label="Play">
-      <svg id="ico" width="11" height="13" viewBox="0 0 11 13" aria-hidden="true">
-        <path fill="currentColor" d="M0 0l11 6.5L0 13z"></path></svg>
-      <span id="play-label">Play</span>
-    </button>
-    <div class="seek" id="seek" role="slider" tabindex="0" aria-label="Seek"
-         aria-valuemin="0" aria-valuemax="20" aria-valuenow="0">
-      <div class="seek-track"></div><div class="seek-fill" id="seek-fill"></div>
+      <div class="seek" id="seek" role="slider" tabindex="0" aria-label="Seek time"
+           aria-valuemin="0" aria-valuemax="20" aria-valuenow="0">
+        <div class="seek-track"></div>
+        <div class="seek-fill" id="seek-fill"></div>
+      </div>
+
+      <span class="clock" id="clock">0.0 / 20.0 s</span>
     </div>
-    <span class="clock" id="clock">0.0 / 20.0 s</span>
+
+    <div class="stats-pills">
+      <div class="stat-pill">
+        <span class="stat-label">Motor Rate</span>
+        <span class="stat-val" id="r-rate">&mdash;</span><span class="stat-unit">Hz</span>
+      </div>
+      <div class="stat-pill">
+        <span class="stat-label">Firing Now</span>
+        <span class="stat-val" id="r-live">&mdash;</span>
+      </div>
+      <div class="stat-pill">
+        <span class="stat-label">Notes Active</span>
+        <span class="stat-val" id="r-notes">0</span>
+      </div>
+      <div class="stat-pill">
+        <span class="stat-label">Total Spikes</span>
+        <span class="stat-val" id="r-tot">&mdash;</span>
+      </div>
+    </div>
   </div>
 
   <footer>
@@ -191,13 +538,14 @@
     kyuchek:{chromatic:"audio/kyuchek_clip_range_15s_family_chromatic.mp3",
              pentatonic:"audio/kyuchek_clip_range_15s_family_pentatonic.mp3"},
     satie:{chromatic:"audio/Gymnopedie_No_1_clip_range_31s_family_chromatic.mp3",
-           pentatonic:"audio/Gymnopedie_No_1_clip_range_31s_family_pentatonic.mp3"}};
+            pentatonic:"audio/Gymnopedie_No_1_clip_range_31s_family_pentatonic.mp3"}};
 
-  var GROUND="#191917", SPIKE="#e8e6e0";
+  var GROUND="#141412", SPIKE="#e8e6e0";
   var BLUE=[[25,25,23],[24,79,149],[37,106,191],[57,135,229],[134,182,239],[227,240,254]];
   var ORANGE=[[122,47,19],[168,65,29],[217,89,38],[235,104,52],[249,205,179]];
   var LAY=[[57,135,229,0.42,2.0],[217,89,38,0.46,2.2],[207,205,196,0.20,1.35],
            [138,136,127,0.15,1.15],[92,90,84,0.13,1.05]];
+
   function ramp(s,t){t=Math.max(0,Math.min(1,t));var f=t*(s.length-1),i=Math.floor(f),k=f-i;
     if(i>=s.length-1)return s[s.length-1];var a=s[i],b=s[i+1];
     return [a[0]+(b[0]-a[0])*k,a[1]+(b[1]-a[1])*k,a[2]+(b[2]-a[2])*k];}
@@ -210,9 +558,35 @@
           ov:document.getElementById("overlay")};
   var W=0,BW=0,BH=0,DPR=1,pitches=[],inten=null,lastTick=-1,lastT=0;
 
+  var offBrainCanvas = document.createElement("canvas");
+  var offBrainCtx = offBrainCanvas.getContext("2d");
+
   function clip(){return D.clips[state.clip];}
   function anat(){return ANAT[state.clip];}
   function prep(){ inten=new Float32Array(anat().layer.length); lastTick=-1; lastT=0; }
+
+  function prepOffBrain(){
+    if (!BW || !BH) return;
+    offBrainCanvas.width = Math.round(BW * DPR);
+    offBrainCanvas.height = Math.round(BH * DPR);
+    offBrainCtx.setTransform(DPR, 0, 0, DPR, 0, 0);
+
+    var A = anat(), u = A.pos[0], v = A.pos[1], L = A.layer, dep = A.depth;
+    offBrainCtx.fillStyle = GROUND;
+    offBrainCtx.fillRect(0, 0, BW, BH);
+
+    var pad = 6, w = BW - pad * 2, h = BH - pad * 2;
+    for (var i = 0; i < L.length; i++) {
+      var p = LAY[L[i]], lift = 0.55 + 0.45 * dep[i];
+      offBrainCtx.globalAlpha = Math.min(1, p[3] * lift);
+      offBrainCtx.fillStyle = "rgb(" + p[0] + "," + p[1] + "," + p[2] + ")";
+      var r = p[4], X = pad + u[i] * w, Y = pad + v[i] * h;
+      offBrainCtx.beginPath();
+      offBrainCtx.arc(X, Y, r, 0, 6.2832);
+      offBrainCtx.fill();
+    }
+    offBrainCtx.globalAlpha = 1;
+  }
 
   function fit(){
     DPR=Math.min(2,window.devicePixelRatio||1);
@@ -223,26 +597,29 @@
       el.style.height=h+"px"; el.width=Math.round(W*DPR); el.height=Math.round(h*DPR);
       el.getContext("2d").setTransform(DPR,0,0,DPR,0,0);
     });
-    var sc=document.querySelector(".scope").getBoundingClientRect();
-    var oh=Math.round(sc.height-23);
+    var sc=cv.ov.parentNode.getBoundingClientRect();
+    var oh=Math.round(sc.height-20);
     cv.ov.style.height=oh+"px"; cv.ov.width=Math.round(W*DPR); cv.ov.height=Math.round(oh*DPR);
     cv.ov.getContext("2d").setTransform(DPR,0,0,DPR,0,0);
     var bb=cv.brain.getBoundingClientRect();
     BW=Math.max(120,Math.round(bb.width)); BH=Math.max(120,Math.round(bb.height));
     cv.brain.width=Math.round(BW*DPR); cv.brain.height=Math.round(BH*DPR);
     cv.brain.getContext("2d").setTransform(DPR,0,0,DPR,0,0);
-    draw(); tick(true);
+
+    prepOffBrain();
+    draw();
+    tick(true);
   }
 
   function draw(){
     var c=clip(),n=c.nTicks,cw=W/n;
-    var g=cv.bands.getContext("2d"),h=92,rh=h/8;
+    var g=cv.bands.getContext("2d"),h=parseInt(cv.bands.getAttribute("height"),10),rh=h/8;
     g.fillStyle=GROUND; g.fillRect(0,0,W,h);
     for(var t=0;t<n;t++) for(var b=0;b<8;b++){
       g.fillStyle=rgb(ramp(BLUE,c.bands[t*8+b]/255));
       g.fillRect(t*cw,h-(b+1)*rh,Math.ceil(cw)+0.5,rh+0.5);
     }
-    var s=cv.spikes.getContext("2d"),sh=218,N=D.nNeurons,nh=sh/N;
+    var s=cv.spikes.getContext("2d"),sh=parseInt(cv.spikes.getAttribute("height"),10),N=D.nNeurons,nh=sh/N;
     s.fillStyle=GROUND; s.fillRect(0,0,W,sh);
     D.groups.forEach(function(gr,i){ if(i%2===0){ s.fillStyle="#1f1f1c";
       s.fillRect(0,sh-gr.hi*nh,W,(gr.hi-gr.lo)*nh);} });
@@ -250,7 +627,7 @@
     var dot=Math.max(1.1,Math.min(2.4,nh*0.8));
     for(var i=0;i<c.spikeT.length;i++)
       s.fillRect(c.spikeT[i]/(c.dur*1000)*W,sh-(c.spikeN[i]+1)*nh,dot,Math.max(1.2,nh*0.85));
-    var o=cv.notes.getContext("2d"),oh2=92,segs=c.notes[state.scale];
+    var o=cv.notes.getContext("2d"),oh2=parseInt(cv.notes.getAttribute("height"),10),segs=c.notes[state.scale];
     o.fillStyle=GROUND; o.fillRect(0,0,W,oh2);
     pitches=[]; segs.forEach(function(q){ if(pitches.indexOf(q[2])<0) pitches.push(q[2]); });
     pitches.sort(function(a,b){return a-b;});
@@ -267,11 +644,14 @@
 
   function paintBrain(){
     var A=anat(),ctx=cv.brain.getContext("2d"),u=A.pos[0],v=A.pos[1],L=A.layer,dep=A.depth;
-    ctx.fillStyle=GROUND; ctx.fillRect(0,0,BW,BH);
+    ctx.drawImage(offBrainCanvas, 0, 0, BW, BH);
+
     var pad=6,w=BW-pad*2,h=BH-pad*2;
     for(var i=0;i<L.length;i++){
-      var p=LAY[L[i]],a=inten[i],lift=0.55+0.45*dep[i];
-      ctx.globalAlpha=Math.min(1,p[3]*lift*(1-a)+(0.5+0.5*lift)*a);
+      var a=inten[i];
+      if (a <= 0.005) continue;
+      var p=LAY[L[i]], lift=0.55+0.45*dep[i];
+      ctx.globalAlpha=Math.min(1, (0.5+0.5*lift)*a);
       ctx.fillStyle="rgb("+p[0]+","+p[1]+","+p[2]+")";
       var r=p[4]*(1+a*1.1), X=pad+u[i]*w, Y=pad+v[i]*h;
       ctx.beginPath(); ctx.arc(X,Y,r,0,6.2832); ctx.fill();
@@ -286,7 +666,7 @@
     var x=frac*W,ctx=cv.ov.getContext("2d"),H=cv.ov.height/DPR;
     ctx.clearRect(0,0,W,H);
     if(frac<1){
-      ctx.fillStyle="rgba(17,17,16,0.80)"; ctx.fillRect(x,0,W-x,H);
+      ctx.fillStyle="rgba(13,13,12,0.82)"; ctx.fillRect(x,0,W-x,H);
       ctx.fillStyle="rgba(217,89,38,0.16)"; ctx.fillRect(Math.max(0,x-24),0,24,H);
     }
     ctx.fillStyle="#d95926"; ctx.fillRect(x-1,0,2,H);
@@ -304,8 +684,7 @@
 
     var live=0; for(var q=0;q<inten.length;q++) if(inten[q]>0.5) live++;
     var i2=Math.min(c.nTicks-1,Math.floor(frac*c.nTicks));
-    document.getElementById("r-time").innerHTML=T.toFixed(1)+"<small>s</small>";
-    document.getElementById("r-rate").innerHTML=c.motorRate[i2].toFixed(1)+"<small>Hz</small>";
+    document.getElementById("r-rate").textContent=c.motorRate[i2].toFixed(1);
     document.getElementById("r-live").textContent=live.toLocaleString("en-US");
     var segs=c.notes[state.scale],n2=0;
     for(var m=0;m<segs.length;m++) if(segs[m][0]<=T&&segs[m][1]>T) n2++;
@@ -347,7 +726,7 @@
       state.clip=btn.dataset.clip;
       document.querySelectorAll(".tab[data-clip]").forEach(function(b){
         b.setAttribute("aria-pressed",String(b.dataset.clip===state.clip)); });
-      prep(); loadAudio(false); draw(); tick(true);
+      prep(); prepOffBrain(); loadAudio(false); draw(); tick(true);
     });
   });
   document.getElementById("t-scale").addEventListener("click",function(){
@@ -368,7 +747,23 @@
     au.currentTime=Math.max(0,Math.min(clip().dur-0.05,au.currentTime+d)); tick(true);
   });
 
+  document.addEventListener("keydown", function(e){
+    if (e.code === "Space" || e.key === " ") {
+      var act = document.activeElement;
+      if (act && (act.tagName === "BUTTON" || act.tagName === "INPUT" || act.getAttribute("role") === "slider")) {
+        if (act.id === "play") {
+          e.preventDefault();
+        }
+        return;
+      }
+      e.preventDefault();
+      setPlay(!state.playing);
+    }
+  });
+
   window.addEventListener("resize",fit);
   prep(); loadAudio(false); fit();
 })();
 </script>
+</body>
+</html>
