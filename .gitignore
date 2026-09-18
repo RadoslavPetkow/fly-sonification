@@ -20,9 +20,10 @@ explore/recon_report.txt
 *.mp3
 *.ogg
 
-# ...except the final deliverable renders
+# ...except the final deliverable renders and the web player's assets
 !renders/*.mid
 !renders/*.wav
+!docs/audio/*.mp3
 
 # macOS
 .DS_Store
