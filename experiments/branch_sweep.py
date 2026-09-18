@@ -790,6 +790,23 @@ def report(store, ctx):
         (f"duration_ms is {ctx.bc.duration_ms / 1e3:g} s, half of TransmissionConfig.duration_ms "
          f"({TransmissionConfig().duration_ms / 1e3:g} s), for runtime; the k = 0 condition measures "
          f"what that shortening costs."),
+        ("NORMALISATION: every transmission result in this project - the published one included - is "
+         "measured under SimConfig.normalization = 'sqrt_in', which divides row i of W by "
+         "sqrt(sum_j |W[i, j]|). That was chosen in calibration because it opened a stable "
+         "operating regime, not because the animal does it. It is not neutral for this readout: the "
+         "descending hop-2 neurons carry 5.7x the total incoming weight of a typical hop-2 neuron, "
+         "so sqrt_in scales each of their inputs down by sqrt(5.7) = 2.4x relative to their "
+         "neighbours, purely for being larger. 'in_degree' would divide by the sum itself and "
+         "penalise them 5.7x instead - harder, so it can only confirm, never overturn. 'raw' is the "
+         "normalisation that could overturn it, and it did not win the calibration."),
+        ("STRUCTURE (experiments/input_share.py, no model and no normalisation): the descending "
+         "hop-2 neurons take the SAME proportional share of their input from hop 1 as any other "
+         "hop-2 cell - weight share 0.01533 vs 0.01508, p = 0.78 - and receive 5.2x MORE of it in "
+         "absolute terms (median |W| 31 vs 6). They are the best-connected listeners in the layer. "
+         "Under sqrt_in they nonetheless sit ~2% of the way from a non-transmitting layer to a "
+         "transmitting one. The earlier working-note framing 'the path is diluted', which "
+         "attributed that gap to the connectome, is WITHDRAWN: the proportional share is equal in "
+         "the raw matrix, so the gap is not explained by how much auditory input these cells get."),
         ("DOSE AND THE INTERNAL CONTROL: at k = 100 only 94 of the 1,057 descending hop-2 targets "
          "received an added edge, so the 963 untouched ones served as a control group INSIDE the "
          "same simulation. At k = 10,000 every one of the 1,057 targets receives at least one edge "
