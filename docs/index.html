@@ -45,7 +45,7 @@
       flex-direction: column;
       gap: 10px;
       min-height: 100vh;
-      justify-content: space-between;
+      justify-content: flex-start;
     }
 
     header {
@@ -376,6 +376,7 @@
     }
 
     footer {
+      margin-top: auto;
       border-top: 1px solid var(--edge);
       padding-top: 10px;
       color: var(--muted);
@@ -662,7 +663,7 @@
   }
 
   function tick(force){
-    var c=clip(),T=au.currentTime||0,frac=Math.max(0,Math.min(1,T/c.dur));
+    var c=clip(),T=Math.min(au.currentTime||0,c.dur),frac=Math.max(0,Math.min(1,T/c.dur));
     var x=frac*W,ctx=cv.ov.getContext("2d"),H=cv.ov.height/DPR;
     ctx.clearRect(0,0,W,H);
     if(frac<1){
@@ -694,7 +695,12 @@
     document.getElementById("seek").setAttribute("aria-valuenow",T.toFixed(1));
   }
 
-  function loop(){ if(state.playing){ tick(); requestAnimationFrame(loop);} }
+  function loop(){
+    if(!state.playing) return;
+    tick();
+    if((au.currentTime||0) >= clip().dur){ setPlay(false); return; }
+    requestAnimationFrame(loop);
+  }
 
   function loadAudio(keep){
     var t=keep?au.currentTime:0,was=state.playing;
