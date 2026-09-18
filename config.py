@@ -445,3 +445,94 @@ class Paths:
     figures: str = "figures"
     runs: str = "runs"
     docs: str = "docs"
+@dataclass
+class BranchConfig:
+    """experiments/add_branches.py + experiments/branch_sweep.py: how many synapses must be ADDED
+    from the hop-1 population onto the hop-2 descending neurons before that layer's mutual
+    information with the input leaves the circular-shift null?
+
+    Every value here was fixed BEFORE the first run and is never tuned. The simulation parameters
+    themselves (w_scale, g_inh, sigma_noise, ...) are NOT here: they come from cache/calibration.json
+    unchanged, exactly as experiments/transmission.py reads them.
+    """
+    # --- graph surgery -----------------------------------------------------
+    source_hop: int = 1                 # pre drawn from neurons at this BFS hop from the sensory set
+    target_hop: int = 2                 # post drawn from motor_idx neurons at this hop
+    expect_sources: int = 665           # asserted; hop layers are computed from the UNMODIFIED matrix
+    expect_targets: int = 1057
+    # "spread": post uniform over all targets. "concentrated": post uniform over a random subset of
+    # ceil(targets_frac * |TARGETS|), the subset fixed by the seed.
+    # "displaced" is the placement control: the same k, the same sign rule, and the SAME multiset of
+    # weight magnitudes and the same excitatory/inhibitory count as the matched real arm, but placed
+    # between neurons with nothing to do with the auditory pathway - hop-3 neurons that are not motor
+    # neurons, with everything in SOURCES or TARGETS excluded. It separates "a perturbation of this
+    # size moves the layer" from "a perturbation in THIS BLOCK moves the layer".
+    # "wrong_targets" (arm D) keeps the REAL presynaptic sources - the same hop-1 neurons, which do
+    # carry the signal - and moves only the targets: an equal-sized random draw from the hop-2
+    # neurons that are NOT descending. It separates "the sources carry signal" from "this particular
+    # block", which "displaced" cannot, because displaced moves the sources too.
+    policies = ("spread", "concentrated", "displaced", "wrong_targets")
+    displaced_hop: int = 3              # pre and post both drawn from this hop, motor neurons excluded
+    wrong_targets_hop: int = 2          # arm D draws its targets from this hop, motor neurons excluded
+    targets_frac: float = 0.05          # default for policy "concentrated"
+    concentrated_fracs = (0.02, 0.05, 0.2)   # Stage 3 arm
+    # Added-edge weight magnitudes are drawn WITH REPLACEMENT from the empirical |W.data| of the whole
+    # matrix (no fitted distribution, no constant); the sign is inherited from the presynaptic column.
+    sample_batch: int = 1_000_000       # candidate (post, pre) pairs drawn per rejection round
+    branch_subdir: str = "branches"     # under Paths.cache; cache/adjacency.npz is never modified
+
+    # --- sweep -------------------------------------------------------------
+    stage1_k = (0, 100, 1000, 10000, 100000)
+    stage1_seed: int = 1
+    seeds = (1, 2, 3)                   # Stage 2 and Stage 3
+    # Halved from TransmissionConfig.duration_ms (60 s) for runtime; the k = 0 control re-runs the
+    # published experiment at this duration so the shortening is itself measured.
+    duration_ms: float = 30000.0
+    # A condition FAILS the regime check (and stops the ascending sweep) outside these bounds.
+    # Never used to re-tune: the failing k is reported as the edge of the usable regime.
+    regime_rate_hz = (1.0, 8.0)
+    regime_max_rate_per_active_hz: float = 40.0
+    # Crossing criterion for the hop-2 descending layer: the same test experiments/transmission.py
+    # applies to its layers - z >= TransmissionConfig.null_z_min AND the layer mean above every
+    # shuffle - on the MI statistic.
+    crossing_stat: str = "mi"
+    # Layers reported at every condition, computed ONCE from the unmodified matrix.
+    readout_layer: str = "motor at hop 2"
+    positive_control_layer: str = "motor at hop 1"
+    negative_control_layer: str = "motor at hop 3"
+    results_json: str = "branch_sweep.json"
+    figure: str = "branch_sweep.png"
+    log: str = "branch_sweep.log"
+
+@dataclass
+class RunToRunConfig:
+    """experiments/run_to_run.py - the run-to-run null, the one this project did not have.
+
+    The circular-shift null of experiments/transmission.py controls the shuffling of the SIGNAL
+    inside a single run. It says nothing about how far the statistic moves when only the noise
+    realization changes and the graph, the drive and every parameter stay identical. That spread is
+    the real reference for any claim of the form "layer L is above null" or "condition A differs
+    from condition B", including the published hop-1 / hop-2 transmission result, which rests on one
+    run at LIF noise seed 0.
+    """
+    n_seeds: int = 8                 # LIF noise seeds 1..n_seeds, measured ALONGSIDE seed 0 (the run
+                                     # every other experiment in this repo is built on)
+    # Both durations are measured: 30 s is what the branch sweep used, 60 s is
+    # TransmissionConfig.duration_ms, the duration the PUBLISHED transmission result was measured at.
+    # The 60 s spread is what decides whether that result survives as published.
+    durations_ms = (30000.0, 60000.0)
+    duration_ms: float = 30000.0     # default for a single run; --duration-ms overrides
+    # z is not usable as a criterion across runs: its numerator (real - null mean) and its
+    # denominator (null sd) both move between noise realizations, and the null sd moved by a factor
+    # of 2.8 over the first three seeds. The reported quantity is the EXCESS, real - null mean, with
+    # a run-to-run confidence interval, plus an exact empirical p. z is kept as a descriptive aside.
+    n_shuffles: int = 200            # >= 200 so an exact p below the Bonferroni level is reachable
+    primary_statistic: str = "excess"
+    # Layers whose z distribution is reported. "motor at hop 1" is the published positive result,
+    # "motor at hop 2" the branch sweep's readout, "motor at hop 3" the negative control.
+    layers = ("hop 0 (sensory)", "hop 1", "motor at hop 1", "motor at hop 2", "motor at hop 3",
+              "motor (all)")
+    subdir: str = "run_to_run"       # under Paths.cache; sims keyed by adjacency hash + duration + seed
+    results_json: str = "run_to_run.json"
+    figure: str = "run_to_run.png"
+    log: str = "run_to_run.log"

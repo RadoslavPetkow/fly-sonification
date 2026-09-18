@@ -89,13 +89,21 @@ def offdiag_abs_max(x):
 # =============================================================================
 
 @torch.no_grad()
-def simulate(sc, cc, tc, calib, groups, force):
-    if SIM_CACHE.exists() and not force:
-        print(f"using cached simulation {SIM_CACHE.relative_to(ROOT)} (--force to re-run)")
-        d = np.load(SIM_CACHE)
+def simulate(sc, cc, tc, calib, groups, force, adjacency_path=None, sim_cache=None, extra_meta=None):
+    """Warm-up + tc.duration_ms of simulation, returning binned spike counts and the binned drive.
+
+    adjacency_path / sim_cache / extra_meta default to cache/adjacency.npz, cache/transmission_sim.npz
+    and no extra metadata; they are parameters so experiments/branch_sweep.py can run this same drive
+    and simulation over a modified matrix without duplicating either, and can stamp the full condition
+    descriptor into the cache it validates on load (refactor of Sep 2026; the defaults are the original
+    behaviour)."""
+    sim_cache = SIM_CACHE if sim_cache is None else Path(sim_cache)
+    if sim_cache.exists() and not force:
+        print(f"using cached simulation {sim_cache.relative_to(ROOT)} (--force to re-run)")
+        d = np.load(sim_cache)
         return d["counts"], d["drive_binned"], d["z"], json.loads(str(d["meta"]))
 
-    net = LIFNetwork(CACHE, cfg=sc)
+    net = LIFNetwork(CACHE, cfg=sc, adjacency_path=adjacency_path)
     n_groups = len(groups)
     n_warm = round(cc.warmup_ms / sc.dt_ms)
     n_meas = round(tc.duration_ms / sc.dt_ms)
@@ -141,10 +149,14 @@ def simulate(sc, cc, tc, calib, groups, force):
     wall = time.perf_counter() - t0
     drive_binned = current[n_warm:n_warm + n_meas].reshape(n_bins, bin_steps, n_groups).mean(axis=1)
     meta = {"n_bins": n_bins, "bin_ms": tc.bin_ms, "wall_s": wall, "ms_per_step": wall * 1e3 / n_meas,
-            "i_lo": i_lo, "i_hi": i_hi, "warmup_steps": n_warm}
-    np.savez_compressed(SIM_CACHE, counts=counts, drive_binned=drive_binned, z=z[n_warm:].astype(np.float32),
+            "i_lo": i_lo, "i_hi": i_hi, "warmup_steps": n_warm, "duration_ms": n_meas * sc.dt_ms,
+            "adjacency": str(net.adjacency_path)}
+    if extra_meta:
+        meta.update(extra_meta)
+    sim_cache.parent.mkdir(parents=True, exist_ok=True)
+    np.savez_compressed(sim_cache, counts=counts, drive_binned=drive_binned, z=z[n_warm:].astype(np.float32),
                         meta=json.dumps(meta))
-    print(f"simulated in {wall / 60:.1f} min ({meta['ms_per_step']:.2f} ms/step); cached {SIM_CACHE.relative_to(ROOT)}")
+    print(f"simulated in {wall / 60:.1f} min ({meta['ms_per_step']:.2f} ms/step); cached {sim_cache.relative_to(ROOT)}")
     return counts, drive_binned, z[n_warm:], meta
 
 
@@ -192,7 +204,10 @@ def abs_corr(R, S):
     return np.abs(np.nan_to_num(r))
 
 
-def analyze(counts, drive_binned, layers, tc, rng):
+def analyze(counts, drive_binned, layers, tc, rng, per_unit=False):
+    """per_unit=True additionally returns each unit's own best-group score and the pooled per-unit
+    null scores, so a layer's claim can be made about the DISTRIBUTION of its units rather than only
+    about the layer mean. Off by default: on the 112k-unit hop layers those arrays are large."""
     T = counts.shape[0]
     K, M = tc.mi_signal_bins, tc.mi_response_levels
     S = drive_binned.T.astype(np.float64)                       # (G, T)
@@ -233,8 +248,19 @@ def analyze(counts, drive_binned, layers, tc, rng):
                 "z": (stat - float(null_stat.mean())) / sd if sd > 0 else None,
                 "percentile": float((null_stat < stat).mean() * 100),
                 "frac_units_above_own_null_max": float((real > null.max(axis=0)).mean()),
+                "n_units_above_own_null_max": int((real > null.max(axis=0)).sum()),
+                # the null distribution itself, so an exact empirical p can be formed downstream:
+                # p = (1 + #(null >= real)) / (1 + n_shuffles). Reporting z alone treats a
+                # 20-shuffle null as if it were a parametric test, which it is not.
+                "n_null_ge_real": int((null_stat >= stat).sum()),
+                "p_empirical": float((1 + (null_stat >= stat).sum()) / (1 + tc.n_shuffles)),
+                "null_values": null_stat.tolist(),
             }
         res["best_group_counts"] = np.bincount(mi_real.argmax(axis=1), minlength=G).tolist()
+        if per_unit:
+            res["unit_scores"] = {"mi": best_mi.tolist(), "abs_r": best_r.tolist()}
+            res["null_unit_scores"] = {"mi": null_mi_best.ravel().tolist(),
+                                       "abs_r": null_r_best.ravel().tolist()}
         results[name] = res
     return results, shifts
 
