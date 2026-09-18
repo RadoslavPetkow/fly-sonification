@@ -807,6 +807,20 @@ def report(store, ctx):
          "transmitting one. The earlier working-note framing 'the path is diluted', which "
          "attributed that gap to the connectome, is WITHDRAWN: the proportional share is equal in "
          "the raw matrix, so the gap is not explained by how much auditory input these cells get."),
+        ("ANALYZED SUBSET: a layer's statistic is a mean over its units with >= "
+         "TransmissionConfig.min_spikes spikes in the measured window, and for the descending layers "
+         "that is a MINORITY of the layer in every run of this project, the published one included: "
+         "median 24 of 56 hop-1 descending neurons (43%), 368 of 1,057 hop-2 (35%), 84 of 209 hop-3 "
+         "(40%) under sqrt_in at 60 s. 'Hop 1 transmits' is therefore a statement about the ~40% of "
+         "hop-1 descending neurons that fire at all under this drive, not about all 56."),
+        ("NORMALISATION, TESTED: the concern that sqrt_in drives the hop-2 result was tested against "
+         "raw - the normalisation that most favours these cells, since it applies no row scaling at "
+         "all and their 5.2x absolute advantage in hop-1 input then stands undiminished. raw has a "
+         "usable regime (experiments/norm_regime.py: w_scale 0.152528, rate 2.94 Hz, chosen on the "
+         "regime gates before any MI was computed) and the precondition holds (344 of 1,057 hop-2 "
+         "units analyzed, against 368 under sqrt_in). Under raw the hop-2 layer sits at 0.010 "
+         "[0.002, 0.019] of the way from hop 3 to hop 1, against 0.022 [0.016, 0.028] under sqrt_in "
+         "- no higher, slightly lower. The finding survives the normalisation that most favours it."),
         ("DOSE AND THE INTERNAL CONTROL: at k = 100 only 94 of the 1,057 descending hop-2 targets "
          "received an added edge, so the 963 untouched ones served as a control group INSIDE the "
          "same simulation. At k = 10,000 every one of the 1,057 targets receives at least one edge "

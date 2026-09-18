@@ -530,8 +530,11 @@ def profile(paths, upgrade=True):
                                         "sd": float(pos.std(ddof=1)), "ci95": [lo, hi]},
                       "stability": stats, "recommended": best, "recommendation": rec}
         profile_figure(d, label, pos)
+    # merge rather than overwrite: profiling one condition must not erase the others' record
     dest = CACHE / RunToRunConfig().subdir / "layer_profile.json"
-    dest.write_text(json.dumps(out, indent=2, default=str))
+    merged = json.loads(dest.read_text()) if dest.exists() else {}
+    merged.update(out)
+    dest.write_text(json.dumps(merged, indent=2, default=str))
     print(f"\nwrote {dest.relative_to(ROOT)}")
     return out
 
