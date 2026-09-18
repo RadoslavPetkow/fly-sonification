@@ -406,7 +406,42 @@ class MidiConfig:
     wav_sample_rate: int = 44100
 
 @dataclass
+class AnatomyConfig:
+    """The anatomical view of the web player: data/fetch_positions.py + experiments/export_anatomy.py."""
+    # --- neuron set --------------------------------------------------------
+    # Chosen from the GRAPH alone (BFS hop from the sensory set), never from firing rate, so the
+    # picture cannot be cherry-picked: every sensory neuron, every hop-1 neuron (the hop-1 motor
+    # neurons - the MIDI voices - labelled separately), and a fixed-seed uniform sample of hops 2
+    # and 3. Hops 4-7 (5,551 neurons) and the 1,139 unreachable ones are left out entirely.
+    hop2_sample: int = 2000
+    hop3_sample: int = 1000
+    sample_seed: int = 0
+    layers = ("sensory", "motor", "hop1", "hop2", "hop3")
+    # --- position fetch ----------------------------------------------------
+    # somaLocation is null for 25,098 of the 165,122 Traced neurons. Where it is, the fallback is the
+    # centroid of every synapse of that body (Neuron -Contains-> SynapseSet -Contains-> Synapse), which
+    # is a real measured position, not a guess - positions.parquet records which was used per neuron.
+    soma_batch: int = 2000       # bodyIds per somaLocation query
+    synapse_batch: int = 100     # bodyIds per centroid query; that one aggregates every synapse of
+                                 # every listed body, so the batch has to stay small
+    # --- projection --------------------------------------------------------
+    # Measured on the real soma cloud (140,024 points): x separates left from right (L mean 72,357 vs
+    # R 24,717), z separates brain from ventral nerve cord (31,292 vs 96,787), y is dorso-ventral
+    # WITHIN each part. So the view with "brain lobes on top, nerve cord below" is (x, z) - horizontal
+    # x, vertical z increasing downward from brain to VNC - and y is the depth axis. (x, y) is a
+    # frontal view of the brain alone, with the whole VNC projected on top of it.
+    proj_horizontal: str = "x"
+    proj_vertical: str = "z"
+    proj_depth: str = "y"
+    pos_decimals: int = 4        # of a 0..1 normalized axis: ~9 voxels ~= 0.07 um on the z extent
+    # --- export ------------------------------------------------------------
+    clips = ("kyuchek_clip_range_15s", "Gymnopedie_No_1_clip_range_31s")
+    max_json_mb: float = 3.0     # over this, cut hop2_sample/hop3_sample - never the spikes
+    figure_dpi: int = 130
+
+@dataclass
 class Paths:
     cache: str = "cache"
     figures: str = "figures"
     runs: str = "runs"
+    docs: str = "docs"

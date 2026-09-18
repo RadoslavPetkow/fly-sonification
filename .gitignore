@@ -24,6 +24,7 @@ explore/recon_report.txt
 !renders/*.mid
 !renders/*.wav
 !docs/audio/*.mp3
+!docs/*.json
 
 # macOS
 .DS_Store
