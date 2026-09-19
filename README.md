@@ -4,6 +4,36 @@ Audio drives the auditory sensory neurons of a leaky integrate-and-fire network
 built on the full *Drosophila* male CNS connectome (neuPrint `male-cns:v1.0`);
 descending-neuron activity is turned into MIDI.
 
+## Scope of the claims
+
+A connectome-constrained simulation and sonification pipeline, with an internally
+rigorous analysis of how a signal propagates *in that simulation*. **No claim about the
+behaviour of live *Drosophila* is made here**, pending validation against recorded
+physiology. Results are kept in three categories throughout, and the distinction is not
+cosmetic:
+
+- **Properties of the reconstruction** (`experiments/input_share.py`) survive deleting
+  the simulator. Example: the descending neurons two synapses from the antenna take the
+  same proportional share of their input from first-hop neurons as any other second-hop
+  neuron (weight share 0.01533 vs 0.01508, p = 0.78) and 5.2x more of it in absolute
+  weight; the first-hop to second-hop-descending block is 1.19% filled. These are still
+  contingent on the >=2-synapse threshold, the `Traced` restriction, the `consensusNt`
+  sign assignment (glutamate inhibitory), the sensory-set definition, and on one
+  reconstructed male.
+- **Properties of the model** - every information-transmission number here, including the
+  ~1-2% figure for the second hop and every result in `experiments/branch_sweep.py` and
+  `experiments/run_to_run.py`. Each is conditional on the normalisation, `w_scale`,
+  `g_inh`, `sigma_noise`, timestep, delay, binning and the plug-in MI estimator. The
+  raw-vs-`sqrt_in` comparison tests two points in that space, not the space.
+- **Claims about *Drosophila*** - none.
+
+`experiments/run_to_run.py` exists because an earlier version of this repo stated that
+the second hop is "at chance". That came from a single run. Repeating the identical
+simulation with nothing changed but the noise seed puts the same statistic anywhere
+between z = 0.3 and z = 4.9, and the published run had drawn 0.29. The circular-shift
+null bounds variability *within* a run and says nothing about variability *across* runs;
+every claim here is now stated over 10 seeds with a run-to-run interval.
+
 Standing rules for working in this repo are in `CLAUDE.md`; every tunable
 constant lives in `config.py`; calibrated values live in `cache/calibration.json`.
 
